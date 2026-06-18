@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SharePointAgent — Documents Found. Teams Notified.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #030305;
+      --surface: rgba(255,255,255,0.03);
+      --surface-hover: rgba(255,255,255,0.06);
+      --border: rgba(255,255,255,0.06);
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-1: #f59e0b;
+      --accent-2: #ea580c;
+      --accent-glow: rgba(245, 158, 11, 0.25);
+      --gradient-text: linear-gradient(135deg, #fbbf24, #f97316);
+      --orb-1: radial-gradient(circle, rgba(245,158,11,0.15), transparent 70%);
+      --orb-2: radial-gradient(circle, rgba(234,88,12,0.12), transparent 70%);
+      --radius: 1rem;
+      --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-ui);
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Noise overlay */
+    .noise-overlay {
+      position: fixed; inset: 0; pointer-events: none; z-index: 9998; opacity: 0.02;
+    }
+
+    /* Aurora orbs */
+    .orb {
+      position: fixed; border-radius: 50%; pointer-events: none; z-index: 0; filter: blur(80px);
+    }
+    .orb-1 {
+      width: 600px; height: 600px; top: -150px; left: -100px;
+      background: var(--orb-1); animation: drift1 20s ease-in-out infinite alternate;
+    }
+    .orb-2 {
+      width: 500px; height: 500px; top: 300px; right: -150px;
+      background: var(--orb-2); animation: drift2 25s ease-in-out infinite alternate;
+    }
+    .orb-3 {
+      width: 400px; height: 400px; bottom: -100px; left: 30%;
+      background: var(--orb-1); animation: drift3 22s ease-in-out infinite alternate;
+    }
+
+    @keyframes drift1 { from { transform: translate(0,0); } to { transform: translate(80px,60px); } }
+    @keyframes drift2 { from { transform: translate(0,0); } to { transform: translate(-60px,80px); } }
+    @keyframes drift3 { from { transform: translate(0,0); } to { transform: translate(50px,-50px); } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .orb { animation: none; }
+      * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+    }
+
+    /* Skip link */
+    .skip-link {
+      position: absolute; top: 0; left: 0; z-index: 9999;
+      padding: 0.75rem 1.25rem; background: var(--bg); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 0 0 0.5rem 0;
+      font-weight: 600; font-size: 0.875rem; text-decoration: none;
+      transform: translateY(-100%); transition: transform 0.2s ease;
+    }
+    .skip-link:focus { transform: translateY(0); outline: 2px solid var(--accent-1); outline-offset: 2px; }
+
+    /* Focus visible */
+    :focus-visible { outline: 2px solid var(--accent-1); outline-offset: 2px; }
+
+    /* Glass nav */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      background: rgba(3,3,5,0.7);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1200px; margin: 0 auto; padding: 0 1.5rem;
+      display: flex; align-items: center; justify-content: space-between; min-height: 64px; flex-wrap: wrap; gap: 0.5rem;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.125rem; color: var(--text-primary); text-decoration: none;
+    }
+    .nav-brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-1); box-shadow: 0 0 8px var(--accent-glow); }
+    .nav-links { display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
+    .nav-links a {
+      color: var(--text-secondary); text-decoration: none; font-size: 0.875rem; font-weight: 500;
+      padding: 0.5rem 0.75rem; border-radius: 0.5rem; transition: color 0.2s, background 0.2s; min-height: 44px; display: inline-flex; align-items: center;
+    }
+    .nav-links a:hover { color: var(--text-primary); background: var(--surface-hover); }
+    .nav-cta {
+      background: linear-gradient(135deg, var(--accent-1), var(--accent-2)); color: #000; font-weight: 700;
+      padding: 0.5rem 1rem; border-radius: 0.5rem; text-decoration: none; font-size: 0.875rem;
+      transition: transform 0.2s, box-shadow 0.2s; min-height: 44px; display: inline-flex; align-items: center;
+    }
+    .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 4px 20px var(--accent-glow); }
+
+    /* Sections */
+    section { position: relative; z-index: 1; }
+
+    /* Hero */
+    .hero { padding: 8rem 1.5rem 4rem; max-width: 1200px; margin: 0 auto; text-align: center; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      border: 1px solid var(--border); background: var(--surface);
+      padding: 0.375rem 1rem; border-radius: 999px; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.5rem;
+    }
+    .badge .sep { color: var(--accent-1); }
+    .badge .accent { color: var(--accent-1); font-weight: 600; }
+    .hero h1 {
+      font-size: clamp(3rem, 8vw, 6.5rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; margin-bottom: 1.5rem;
+      background: var(--gradient-text); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .hero .subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.25rem); color: var(--text-secondary); max-width: 680px; margin: 0 auto 2.5rem; line-height: 1.6;
+    }
+    .hero-ctas { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 4rem; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+      padding: 0.75rem 1.5rem; border-radius: 0.75rem; font-weight: 600; font-size: 0.9375rem;
+      text-decoration: none; transition: transform 0.2s, box-shadow 0.2s; min-height: 44px; border: none; cursor: pointer;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-1), var(--accent-2)); color: #000;
+      box-shadow: 0 4px 24px var(--accent-glow);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 32px var(--accent-glow); }
+    .btn-ghost {
+      background: var(--surface); color: var(--text-primary); border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--surface-hover); transform: translateY(-2px); }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; max-width: 900px; margin: 0 auto;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 1.5rem 1rem; text-align: center; transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .stat-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.3); }
+    .stat-card .number { font-size: 2rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+    .stat-card .label { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; }
+
+    /* Features */
+    .features { padding: 6rem 1.5rem; max-width: 1200px; margin: 0 auto; }
+    .section-label {
+      text-align: center; font-size: 0.875rem; font-weight: 600; color: var(--accent-1); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem;
+    }
+    .features h2 {
+      text-align: center; font-size: clamp(1.75rem, 4vw, 2.75rem); font-weight: 700; margin-bottom: 3rem; color: var(--text-primary);
+    }
+    .features-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem;
+    }
+    .feature-card {
+      position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      padding: 1.75rem; overflow: hidden; transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.3); }
+    .feature-card .accent-bar {
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+    }
+    .feature-card h3 { font-size: 1.125rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary); }
+    .feature-card p { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.55; }
+
+    /* Code demo */
+    .demo { padding: 4rem 1.5rem; max-width: 1000px; margin: 0 auto; }
+    .demo .section-label { margin-bottom: 1.5rem; }
+    .terminal {
+      background: rgba(0,0,0,0.5); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    }
+    .terminal-header {
+      display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border); background: rgba(255,255,255,0.02);
+    }
+    .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .terminal-dot.red { background: #ef4444; }
+    .terminal-dot.yellow { background: #eab308; }
+    .terminal-dot.green { background: #22c55e; }
+    .terminal-title { font-size: 0.75rem; color: var(--text-muted); margin-left: 0.5rem; font-family: var(--font-mono); }
+    .terminal-body {
+      padding: 1.25rem 1.5rem; overflow-x: auto; font-family: var(--font-mono); font-size: 0.85rem; line-height: 1.7;
+    }
+    .syntax-keyword { color: #c084fc; }
+    .syntax-string { color: #86efac; }
+    .syntax-comment { color: #6b7280; }
+    .syntax-function { color: #93c5fd; }
+    .syntax-method { color: #fcd34d; }
+    .syntax-plain { color: var(--text-primary); }
+    .syntax-punct { color: var(--text-secondary); }
+
+    /* CTA section */
+    .cta { padding: 6rem 1.5rem; max-width: 800px; margin: 0 auto; text-align: center; position: relative; }
+    .cta-glow {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 600px; height: 400px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(245,158,11,0.12), transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    .cta h2 { font-size: clamp(1.75rem, 4vw, 2.75rem); font-weight: 700; margin-bottom: 1rem; position: relative; z-index: 1; }
+    .cta p { color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 2rem; position: relative; z-index: 1; }
+    .cta .btn-primary { position: relative; z-index: 1; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border); padding: 2rem 1.5rem; position: relative; z-index: 1;
+    }
+    .footer-inner {
+      max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+    }
+    .footer-left { font-size: 0.85rem; color: var(--text-muted); }
+    .footer-links { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+    .footer-links a { color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; font-weight: 500; transition: color 0.2s; min-height: 44px; display: inline-flex; align-items: center; }
+    .footer-links a:hover { color: var(--accent-1); }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .features-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .nav-inner { padding: 0 1rem; }
+      .hero { padding-top: 7rem; }
+      .footer-inner { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Noise overlay -->
+  <svg class="noise-overlay" aria-hidden="true">
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/>
+    </filter>
+    <rect width="100%" height="100%" filter="url(#noise)"/>
+  </svg>
+
+  <!-- Aurora orbs -->
+  <div class="orb orb-1" aria-hidden="true"></div>
+  <div class="orb orb-2" aria-hidden="true"></div>
+  <div class="orb orb-3" aria-hidden="true"></div>
+
+  <!-- Skip link -->
+  <a href="#main" class="skip-link">Skip to main content</a>
+
+  <!-- Navigation -->
+  <header class="nav" role="banner">
+    <nav class="nav-inner" aria-label="SharePointAgent">
+      <a href="#" class="nav-brand">
+        <span class="dot" aria-hidden="true"></span>
+        SharePointAgent
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#demo">Demo</a>
+        <a href="#docs">Docs</a>
+        <a href="#get-started" class="nav-cta">Get Started</a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Hero -->
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="badge">
+        TenantFleet Ecosystem <span class="sep">/</span> <span class="accent">Body</span>
+      </div>
+      <h1 id="hero-heading">Documents Found. Teams Notified.</h1>
+      <p class="subtitle">
+        Automated SharePoint site indexing, intelligent document search, and Microsoft Teams bridge for multi-tenant environments.
+      </p>
+      <div class="hero-ctas">
+        <a href="https://github.com/tenantfleet/sharepoint-agent" class="btn btn-primary">Clone on GitHub</a>
+        <a href="#docs" class="btn btn-ghost">Read the Docs</a>
+      </div>
+
+      <div class="stats-grid" aria-label="Key metrics">
+        <div class="stat-card">
+          <div class="number" aria-hidden="true">&#8734;</div>
+          <div class="label">Sites Indexed</div>
+        </div>
+        <div class="stat-card">
+          <div class="number" aria-hidden="true">&#8734;</div>
+          <div class="label">Documents Processed</div>
+        </div>
+        <div class="stat-card">
+          <div class="number" aria-hidden="true">&#8734;</div>
+          <div class="label">Teams Channels</div>
+        </div>
+        <div class="stat-card">
+          <div class="number">&lt; 2s</div>
+          <div class="label">Search Latency</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="features" aria-labelledby="features-heading">
+      <div class="section-label">What SharePointAgent Delivers</div>
+      <h2 id="features-heading">Unified document intelligence</h2>
+      <div class="features-grid">
+        <article class="feature-card">
+          <div class="accent-bar" aria-hidden="true"></div>
+          <h3>Site Indexing</h3>
+          <p>Crawl SharePoint sites across tenants with delta sync and metadata extraction.</p>
+        </article>
+        <article class="feature-card">
+          <div class="accent-bar" aria-hidden="true"></div>
+          <h3>Document Search</h3>
+          <p>Full-text search across document libraries with filters for site, author, date, and content type.</p>
+        </article>
+        <article class="feature-card">
+          <div class="accent-bar" aria-hidden="true"></div>
+          <h3>Teams Notifications</h3>
+          <p>Push document alerts, approvals, and lifecycle events directly to Microsoft Teams channels.</p>
+        </article>
+        <article class="feature-card">
+          <div class="accent-bar" aria-hidden="true"></div>
+          <h3>Permission Audit</h3>
+          <p>Map and audit SharePoint permissions against Entra group membership and guest access.</p>
+        </article>
+        <article class="feature-card">
+          <div class="accent-bar" aria-hidden="true"></div>
+          <h3>Lifecycle Management</h3>
+          <p>Automated retention, archival, and deletion policies based on document age and sensitivity labels.</p>
+        </article>
+        <article class="feature-card">
+          <div class="accent-bar" aria-hidden="true"></div>
+          <h3>Graph API Integration</h3>
+          <p>Built on Microsoft Graph with retry logic, batching, and delta query support.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- Code demo -->
+    <section id="demo" class="demo" aria-labelledby="demo-heading">
+      <div class="section-label">Graph API Site Enumeration</div>
+      <div class="terminal" role="region" aria-label="Code example">
+        <div class="terminal-header">
+          <span class="terminal-dot red" aria-hidden="true"></span>
+          <span class="terminal-dot yellow" aria-hidden="true"></span>
+          <span class="terminal-dot green" aria-hidden="true"></span>
+          <span class="terminal-title">sharepoint-agent.ts</span>
+        </div>
+        <div class="terminal-body">
+<pre><code><span class="syntax-keyword">import</span> <span class="syntax-punct">{</span> <span class="syntax-function">GraphClient</span> <span class="syntax-punct">}</span> <span class="syntax-keyword">from</span> <span class="syntax-string">'@tenantfleet/sharepoint-agent'</span><span class="syntax-punct">;</span>
+
+<span class="syntax-keyword">const</span> <span class="syntax-plain">client</span> <span class="syntax-punct">=</span> <span class="syntax-keyword">new</span> <span class="syntax-function">GraphClient</span><span class="syntax-punct">({</span>
+  <span class="syntax-plain">tenantId</span><span class="syntax-punct">:</span> <span class="syntax-plain">process</span><span class="syntax-punct">.</span><span class="syntax-method">env</span><span class="syntax-punct">.</span><span class="syntax-method">TENANT_ID</span><span class="syntax-punct">,</span>
+  <span class="syntax-plain">clientId</span><span class="syntax-punct">:</span> <span class="syntax-plain">process</span><span class="syntax-punct">.</span><span class="syntax-method">env</span><span class="syntax-punct">.</span><span class="syntax-method">CLIENT_ID</span><span class="syntax-punct">,</span>
+  <span class="syntax-plain">credential</span><span class="syntax-punct">:</span> <span class="syntax-keyword">new</span> <span class="syntax-function">ClientSecretCredential</span><span class="syntax-punct">(</span><span class="syntax-method">...</span><span class="syntax-punct">)</span>
+<span class="syntax-punct">});</span>
+
+<span class="syntax-comment">// Index all sites for a tenant</span>
+<span class="syntax-keyword">const</span> <span class="syntax-plain">sites</span> <span class="syntax-punct">=</span> <span class="syntax-keyword">await</span> <span class="syntax-plain">client</span><span class="syntax-punct">.</span><span class="syntax-method">sites</span><span class="syntax-punct">.</span><span class="syntax-method">deltaQuery</span><span class="syntax-punct">({</span>
+  <span class="syntax-plain">filter</span><span class="syntax-punct">:</span> <span class="syntax-string">"createdDateTime ge 2026-01-01"</span>
+<span class="syntax-punct">});</span>
+
+<span class="syntax-keyword">await</span> <span class="syntax-plain">indexer</span><span class="syntax-punct">.</span><span class="syntax-method">syncDocuments</span><span class="syntax-punct">(</span><span class="syntax-plain">sites</span><span class="syntax-punct">);</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section id="get-started" class="cta" aria-labelledby="cta-heading">
+      <div class="cta-glow" aria-hidden="true"></div>
+      <h2 id="cta-heading">Find every document across every tenant.</h2>
+      <p>Connect SharePoint and Teams in minutes. No search left behind.</p>
+      <a href="https://github.com/tenantfleet/sharepoint-agent" class="btn btn-primary">Clone on GitHub</a>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-left">
+        &copy; 2026 SharePointAgent &mdash; Part of the TenantFleet ecosystem
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/tenantfleet/entragroups">EntraGroups</a>
+        <a href="https://github.com/tenantfleet/tenantforge">TenantForge</a>
+        <a href="https://github.com/tenantfleet/dnsguard">DNSGuard</a>
+        <a href="https://github.com/tenantfleet/rampguard">RampGuard</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
